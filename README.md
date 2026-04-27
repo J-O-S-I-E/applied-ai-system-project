@@ -25,28 +25,6 @@ See [Sample Interactions](#sample-interactions) below for the written versions o
 
 ![Architecture Diagram](assets/architecture.svg)
 
-```
-┌──────────────────────────────────────────────────────┐
-│              React Frontend  (Vite · port 5173)       │
-│   OwnerSetup · PetManager · TaskManager · ScheduleView│
-└────────────────────┬─────────────────────────────────┘
-                     │  HTTP  POST /api/ai-schedule
-                     ▼
-┌──────────────────────────────────────────────────────┐
-│              FastAPI Backend  (Uvicorn · port 8000)   │
-│   POST /api/schedule      → schedule only             │
-│   POST /api/ai-schedule   → schedule + AI layer       │
-│   GET  /api/health        → status + key check        │
-└───┬──────────────┬────────────────┬───────────────────┘
-    │              │                │
-    ▼              ▼                ▼
-Scheduler      RAG Service      AI Agent          Evaluator
-(greedy        (Chroma +        (LangChain +      (rule-based
- first-fit)     Gemini           Gemini 2.0        0–100 score)
-                embeddings)      Flash)
-                    │                │
-               PDFs + Chroma    Google Gemini API
-```
 
 **Data flow:**
 1. User fills in owner, pets, and tasks in the React UI
