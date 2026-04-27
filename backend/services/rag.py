@@ -293,15 +293,13 @@ class RelevanceScorer:
     @staticmethod
     def keyword_score(text: str, query: str) -> float:
         """Score relevance with weighted boost for important pet care terms."""
-        text_words = set(text.lower().split())
-        query_words = set(query.lower().split())
+        def _tokens(s: str) -> set:
+            return set(re.sub(r"[^\w\s]", "", s.lower()).split())
 
-        # Base overlap
+        text_words = _tokens(text)
+        query_words = _tokens(query)
         overlap = len(text_words & query_words)
-
-        # Boost for task-relevant terms
         boost = len(text_words & _config.important_terms) * 2
-
         return float(overlap + boost)
 
     @staticmethod

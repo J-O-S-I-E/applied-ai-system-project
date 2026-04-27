@@ -1,9 +1,6 @@
 """
 ai_agent.py
-PawPal+ AI scheduling advisor — LangChain RAG chain with Gemini.
-
-Uses ChatGoogleGenerativeAI + ChatPromptTemplate + StrOutputParser.
-The RAG context is pre-retrieved per-pet and injected into the prompt.
+PawPal+ AI scheduling advisor — LangChain RAG chain with Gemini 2.0 Flash.
 """
 
 import json
@@ -42,8 +39,8 @@ Analyze the schedule above and respond with a JSON object containing exactly the
 
 "reasoning"       — 3-5 sentences explaining step-by-step why tasks were ordered and placed as they \
 were. Reference each pet's name, species, age, priority levels, and any care guide guidance.
-"explanation"     — A friendly 2-3 sentence plain-English summary the owner can read at a glance.
-"recommendations" — A JSON array of 2-3 short, actionable tips drawn directly from the care guide \
+"explanation"     — A friendly 3-4 sentence plain-English summary the owner can read at a glance.
+"recommendations" — A JSON array of 3-4 short, actionable tips drawn directly from the care guide \
 passages above. Each tip should reference specific guidance from the passages.
 
 Respond ONLY with valid JSON. No markdown fences, no extra text.

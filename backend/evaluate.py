@@ -172,7 +172,8 @@ def test_rag_retrieval() -> bool:
     print("Test  : RAG Knowledge Retrieval")
     print(f"  Retrieved: {'Yes' if ok else 'No'} ({len(passages)} passages)")
     for p in passages:
-        print(f"  → {p[:120]}{'...' if len(p) > 120 else ''}")
+        snippet = p['text']
+        print(f"  → {snippet[:120]}{'...' if len(snippet) > 120 else ''}")
     print(f"Result: {'✅ PASS' if ok else '❌ FAIL'}")
     return ok
 
