@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 490" width="800" height="490"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="490" fill="#f1f5f9" rx="10"/>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-size="16" font-weight="700" fill="#1e293b">PawPal+ AI — System Architecture</text>
+
+  <!-- Row 1: React Frontend -->
+  <rect x="280" y="48" width="240" height="54" rx="8" fill="#7c3aed"/>
+  <text x="400" y="70" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">React Frontend</text>
+  <text x="400" y="89" text-anchor="middle" font-size="11" fill="#ddd6fe">Vite · localhost:5173</text>
+
+  <!-- arrow: frontend → backend -->
+  <line x1="400" y1="102" x2="400" y2="132" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="410" y="121" font-size="10" fill="#64748b">POST /api/ai-schedule</text>
+
+  <!-- Row 2: FastAPI Backend -->
+  <rect x="200" y="132" width="400" height="54" rx="8" fill="#5b21b6"/>
+  <text x="400" y="154" text-anchor="middle" font-size="13" font-weight="600" fill="#fff">FastAPI Backend</text>
+  <text x="400" y="173" text-anchor="middle" font-size="11" fill="#ddd6fe">Uvicorn · localhost:8000</text>
+
+  <!-- arrows: backend → 4 services -->
+  <line x1="253" y1="186" x2="110" y2="250" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="337" y1="186" x2="285" y2="250" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="463" y1="186" x2="515" y2="250" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="547" y1="186" x2="683" y2="250" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Row 3: Four services -->
+  <!-- Scheduler -->
+  <rect x="18" y="250" width="172" height="68" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="104" y="272" text-anchor="middle" font-size="12" font-weight="600" fill="#1e293b">Scheduler</text>
+  <text x="104" y="289" text-anchor="middle" font-size="10" fill="#64748b">Greedy first-fit</text>
+  <text x="104" y="304" text-anchor="middle" font-size="10" fill="#64748b">Priority ordering</text>
+
+  <!-- RAG Service -->
+  <rect x="204" y="250" width="172" height="68" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="290" y="272" text-anchor="middle" font-size="12" font-weight="600" fill="#1e293b">RAG Service</text>
+  <text x="290" y="289" text-anchor="middle" font-size="10" fill="#64748b">Multi-query retrieval</text>
+  <text x="290" y="304" text-anchor="middle" font-size="10" fill="#64748b">Hybrid reranking</text>
+
+  <!-- AI Agent -->
+  <rect x="424" y="250" width="172" height="68" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="510" y="272" text-anchor="middle" font-size="12" font-weight="600" fill="#1e293b">AI Agent</text>
+  <text x="510" y="289" text-anchor="middle" font-size="10" fill="#64748b">LangChain chain</text>
+  <text x="510" y="304" text-anchor="middle" font-size="10" fill="#64748b">Gemini 2.0 Flash</text>
+
+  <!-- Evaluator -->
+  <rect x="610" y="250" width="172" height="68" rx="8" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="696" y="272" text-anchor="middle" font-size="12" font-weight="600" fill="#1e293b">Evaluator</text>
+  <text x="696" y="289" text-anchor="middle" font-size="10" fill="#64748b">Rule-based guardrails</text>
+  <text x="696" y="304" text-anchor="middle" font-size="10" fill="#64748b">0–100 quality score</text>
+
+  <!-- arrows: RAG → PDFs, RAG → Chroma -->
+  <line x1="255" y1="318" x2="150" y2="375" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="315" y1="318" x2="355" y2="375" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+  <!-- arrow: AI Agent → Gemini -->
+  <line x1="510" y1="318" x2="560" y2="375" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Row 4: Data / External -->
+  <!-- PDF Knowledge Base -->
+  <rect x="18" y="375" width="220" height="62" rx="8" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="128" y="397" text-anchor="middle" font-size="12" font-weight="600" fill="#5b21b6">PDF Knowledge Base</text>
+  <text x="128" y="413" text-anchor="middle" font-size="10" fill="#7c3aed">Dog-Book.pdf · Cat-Book.pdf</text>
+  <text x="128" y="428" text-anchor="middle" font-size="10" fill="#7c3aed">Humane Fort Wayne</text>
+
+  <!-- Chroma Vector Store -->
+  <rect x="252" y="375" width="220" height="62" rx="8" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="362" y="397" text-anchor="middle" font-size="12" font-weight="600" fill="#5b21b6">Chroma Vector Store</text>
+  <text x="362" y="413" text-anchor="middle" font-size="10" fill="#7c3aed">gemini-embedding-001</text>
+  <text x="362" y="428" text-anchor="middle" font-size="10" fill="#7c3aed">Persisted locally</text>
+
+  <!-- Gemini API -->
+  <rect x="486" y="375" width="296" height="62" rx="8" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="634" y="397" text-anchor="middle" font-size="12" font-weight="600" fill="#14532d">Google Gemini API</text>
+  <text x="634" y="413" text-anchor="middle" font-size="10" fill="#16a34a">Gemini 2.0 Flash — reasoning &amp; explanation</text>
+  <text x="634" y="428" text-anchor="middle" font-size="10" fill="#16a34a">gemini-embedding-001 — vector embeddings</text>
+
+  <!-- Legend -->
+  <rect x="18" y="456" width="12" height="12" fill="#5b21b6" rx="2"/>
+  <text x="36" y="466" font-size="10" fill="#64748b">Backend services</text>
+  <rect x="160" y="456" width="12" height="12" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1" rx="2"/>
+  <text x="178" y="466" font-size="10" fill="#64748b">Local storage</text>
+  <rect x="280" y="456" width="12" height="12" fill="#dcfce7" stroke="#86efac" stroke-width="1" rx="2"/>
+  <text x="298" y="466" font-size="10" fill="#64748b">External API</text>
+</svg>

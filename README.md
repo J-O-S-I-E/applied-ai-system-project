@@ -4,90 +4,58 @@ An AI-powered pet care scheduling assistant. Owners register their pets, add dai
 
 ---
 
-## Quick Start
+## Original Project
 
-**1 — Install Python dependencies**
-```bash
-pip install -r requirements.txt
-```
+PawPal+ was originally built in Modules 1–3 as a pure rule-based pet care scheduler. Owners could register their pets, add daily care tasks (with priority levels and preferred time windows), and receive an automatically ordered schedule produced by a greedy first-fit algorithm. The original system had no AI component — every scheduling decision was fully deterministic and explainable by the algorithm alone. This AI extension adds semantic document retrieval, a LangChain-powered Gemini agent, and a rule-based guardrail evaluator layered on top of that same unchanged scheduling core.
 
-**2 — Set your Gemini API key** (free at [aistudio.google.com](https://aistudio.google.com))
-```bash
-# Windows
-set GEMINI_API_KEY=your_key_here
+---
 
-# macOS / Linux
-export GEMINI_API_KEY=your_key_here
-```
+## Demo Walkthrough
 
-Or create a `.env` file in the project root:
-```
-GEMINI_API_KEY=your_key_here
-```
+> **Loom video:** [Watch the walkthrough](https://www.loom.com/share/8cbf46591cb5407088686f561bffa6eb)
 
-**3 — Start the API server** (Terminal 1)
-```bash
-python backend/run_api.py
-# → http://localhost:8000
-```
 
-**4 — Start the React frontend** (Terminal 2)
-```bash
-cd frontend
-npm install      # first time only
-npm run dev
-# → http://localhost:5173
-```
+The video shows three end-to-end runs: a normal dog schedule, a cat medication schedule, and an overloaded schedule that triggers guardrail failures. It demonstrates the RAG passage panel, the guardrail score, and the AI reasoning output.
 
-Open `http://localhost:5173`. The app works without a Gemini key — only the AI explanation and RAG embedding steps are skipped.
-
-> **First AI request**: The Chroma vector store is built automatically on the first `/api/ai-schedule` call. This takes ~30 seconds as it embeds all PDF chunks using Gemini. Subsequent requests load from the persisted store instantly.
+See [Sample Interactions](#sample-interactions) below for the written versions of these same scenarios.
 
 ---
 
 ## System Architecture
 
+![Architecture Diagram](assets/architecture.svg)
+
 ```
 ┌──────────────────────────────────────────────────────┐
 │              React Frontend  (Vite · port 5173)       │
-│                                                       │
-│   [ Setup ]  [ Tasks ]  [ Schedule ]                  │
-│      │           │            │                       │
-│   OwnerSetup  TaskManager  ScheduleView               │
-│   PetManager                  │                       │
-│                          ⚡  Build Schedule (Fast)     │
-│                          🧠  Generate AI Schedule      │
+│   OwnerSetup · PetManager · TaskManager · ScheduleView│
 └────────────────────┬─────────────────────────────────┘
-                     │  HTTP  /api/*  (proxied by Vite)
+                     │  HTTP  POST /api/ai-schedule
                      ▼
 ┌──────────────────────────────────────────────────────┐
 │              FastAPI Backend  (Uvicorn · port 8000)   │
-│                                                       │
-│   POST /api/schedule      → fast schedule only        │
-│   POST /api/ai-schedule   → schedule + full AI layer  │
+│   POST /api/schedule      → schedule only             │
+│   POST /api/ai-schedule   → schedule + AI layer       │
 │   GET  /api/health        → status + key check        │
-└────┬────────────────────────────┬────────────────────┘
-     │                            │
-     ▼                            ▼
-┌─────────────────┐    ┌─────────────────────────────────┐
-│  pawpal_system  │    │           AI Layer               │
-│                 │    │                                  │
-│  Owner          │    │  rag.py  (per-pet semantic RAG)  │
-│  Pet            │    │  ├─ Gemini embeddings            │
-│  Task           │    │  ├─ Chroma vector store          │
-│  Scheduler      │    │  ├─ Multi-query retrieval        │
-│  ScheduleResult │    │  ├─ Hybrid reranking             │
-│                 │    │  └─ Source attribution           │
-│  greedy first-  │    │                                  │
-│  fit algorithm  │    │  ai_agent.py  (LangChain chain)  │
-└─────────────────┘    │  ├─ ChatGoogleGenerativeAI       │
-                       │  ├─ ChatPromptTemplate           │
-                       │  └─ StrOutputParser → JSON       │
-                       │                                  │
-                       │  evaluator.py  (guardrails)      │
-                       │  └─ rule-based 0–100 score       │
-                       └─────────────────────────────────┘
+└───┬──────────────┬────────────────┬───────────────────┘
+    │              │                │
+    ▼              ▼                ▼
+Scheduler      RAG Service      AI Agent          Evaluator
+(greedy        (Chroma +        (LangChain +      (rule-based
+ first-fit)     Gemini           Gemini 2.0        0–100 score)
+                embeddings)      Flash)
+                    │                │
+               PDFs + Chroma    Google Gemini API
 ```
+
+**Data flow:**
+1. User fills in owner, pets, and tasks in the React UI
+2. Clicking "Generate AI Schedule" sends a POST to `/api/ai-schedule`
+3. The Scheduler builds a greedy time-slot assignment
+4. The RAG Service runs multi-query semantic search against the species-filtered Chroma vector store, returning the top passages from the PDF care guides
+5. The AI Agent passes the schedule + retrieved passages through a LangChain chain to Gemini 2.0 Flash, which returns structured JSON (reasoning, explanation, recommendations)
+6. The Evaluator applies rule-based guardrails and produces a 0–100 quality score
+7. All results are returned in a single response and rendered in the UI
 
 ---
 
@@ -102,9 +70,9 @@ Open `http://localhost:5173`. The app works without a Gemini key — only the AI
 
 ### AI layer
 - **Semantic RAG** — PDF pet care guides (Dog-Book.pdf, Cat-Book.pdf from Humane Fort Wayne) are chunked, embedded with `gemini-embedding-001`, and stored in a persistent Chroma vector store. Per-pet retrieval runs multi-query search + hybrid reranking for the most relevant passages.
-- **Per-pet context** — each pet's species, age, tasks, and notes drive independent retrieval queries. Retrieved passages are shown in a collapsible panel per pet.
-- **LangChain AI agent** — `ChatGoogleGenerativeAI` + `ChatPromptTemplate` + `StrOutputParser` chain calls Gemini 2.0 Flash with the schedule context and retrieved passages, returning structured JSON: `reasoning`, `explanation`, and `recommendations`.
-- **Guardrail evaluator** — rule-based validation scores the schedule 0–100; surfaces blocking issues (skipped HIGH tasks, conflicts) and warnings (utilisation extremes) independently of the LLM.
+- **Per-pet context** — each pet's species, age, tasks, and notes drive independent retrieval queries. Retrieved passages are shown in a collapsible panel per pet in the UI.
+- **LangChain AI agent** — `ChatGoogleGenerativeAI` + `ChatPromptTemplate` + `StrOutputParser` chain calls Gemini 2.0 Flash with the full schedule context and retrieved passages, returning structured JSON.
+- **Guardrail evaluator** — rule-based validation scores the schedule 0–100 and surfaces blocking issues (skipped HIGH tasks, conflicts) and warnings (utilisation extremes) independent of the LLM.
 
 ---
 
@@ -114,6 +82,8 @@ Open `http://localhost:5173`. The app works without a Gemini key — only the AI
 applied-ai-system-project/
 ├── requirements.txt
 ├── .env                        ← GEMINI_API_KEY goes here
+├── assets/
+│   └── architecture.svg        ← System architecture diagram
 │
 ├── backend/
 │   ├── pawpal_system.py        Core domain — Owner, Pet, Task, Scheduler
@@ -130,6 +100,8 @@ applied-ai-system-project/
 │       ├── Cat-Book.pdf        Humane Fort Wayne cat care guide
 │       └── chroma_db/          Persisted vector store (auto-generated)
 │
+├── model_card.md               AI collaboration & ethics reflection
+│
 └── frontend/
     ├── src/
     │   ├── App.jsx
@@ -145,6 +117,92 @@ applied-ai-system-project/
     ├── package.json
     └── vite.config.js
 ```
+
+---
+
+## Sample Interactions
+
+### Interaction 1 — Normal dog schedule
+
+**Input:**
+- Owner: Alex | Window: 8:00 AM – 8:00 PM
+- Pet: Buddy (Dog, 3 yrs)
+- Tasks: Morning Walk (30 min, HIGH, morning), Feeding (15 min, HIGH, morning), Playtime (20 min, MEDIUM), Evening Walk (25 min, HIGH, evening)
+
+**Schedule output:**
+```
+08:00 AM — Morning Walk     (30 min, HIGH)
+08:30 AM — Feeding          (15 min, HIGH)
+08:45 AM — Playtime         (20 min, MEDIUM)
+05:00 PM — Evening Walk     (25 min, HIGH)
+
+Scheduled: 4  |  Skipped: 0  |  Time used: 90 min  |  Utilization: 12.5%
+```
+
+**Guardrail:** ✅ Passed — Score: 95/100
+*Warning: Only 12.5% of your window is used — consider adding more tasks.*
+
+**AI Explanation:** "Buddy's day is well-organized! The morning walk is placed before feeding, which aligns with the care guide's recommendation to avoid exercise immediately after eating. All high-priority tasks are covered, and the evening walk is correctly placed in the evening time slot."
+
+**AI Recommendations:**
+- "Wait 30–60 minutes after feeding before vigorous exercise to reduce the risk of bloat in dogs"
+- "Two walks daily support healthy digestion, weight management, and behavioral balance"
+- "Keep fresh water available at all times, especially after exercise and meals"
+
+---
+
+### Interaction 2 — Cat with medication
+
+**Input:**
+- Owner: Sam | Window: 9:00 AM – 6:00 PM
+- Pet: Luna (Cat, 5 yrs)
+- Tasks: Medication (10 min, HIGH), Feeding (15 min, HIGH), Grooming (25 min, MEDIUM), Litter Box (10 min, LOW)
+
+**Schedule output:**
+```
+09:00 AM — Medication       (10 min, HIGH)
+09:10 AM — Feeding          (15 min, HIGH)
+09:25 AM — Grooming         (25 min, MEDIUM)
+09:50 AM — Litter Box       (10 min, LOW)
+
+Scheduled: 4  |  Skipped: 0  |  Time used: 60 min  |  Utilization: 11.1%
+```
+
+**Guardrail:** ✅ Passed — Score: 95/100
+
+**AI Explanation:** "Luna's morning routine is efficient and thoughtfully ordered. Medication first ensures it isn't forgotten, followed immediately by feeding — which can help with palatability. Grooming is a great bonding activity after meals when cats are relaxed."
+
+**AI Recommendations:**
+- "Administer medication with a small amount of food to improve tolerance if Luna is resistant"
+- "Regular grooming sessions reduce hairball risk — focus on the back, belly, and behind the ears"
+- "Scoop the litter box daily; cats are highly sensitive to cleanliness and may avoid a dirty box"
+
+---
+
+### Interaction 3 — Overloaded window (guardrail failure)
+
+**Input:**
+- Owner: Jordan | Window: 9:00 AM – 9:30 AM (30 min total)
+- Pet: Rex (Dog, 2 yrs)
+- Tasks: Morning Walk (30 min, HIGH), Feeding (15 min, HIGH), Grooming (20 min, HIGH)
+
+**Schedule output:**
+```
+09:00 AM — Morning Walk     (30 min, HIGH)
+
+Scheduled: 1  |  Skipped: 2  |  Time used: 30 min  |  Utilization: 100%
+```
+
+**Guardrail:** ❌ Issues Found — Score: 60/100
+- *Issue: 2 HIGH priority task(s) could not fit: 'Feeding', 'Grooming'*
+- *Warning: Schedule is 100% full — no buffer for tasks that run over time.*
+
+**AI Explanation:** "Rex's care window is too tight to fit all three essential tasks. The morning walk was prioritized first as the highest-weight HIGH task, but feeding and grooming had no remaining time. A 30-minute window is not enough for a full care routine — aim for at least 60–90 minutes to cover all HIGH-priority needs."
+
+**AI Recommendations:**
+- "Extend your availability window or split tasks between morning and evening sessions"
+- "Feeding is critical and should never be skipped — if time is limited, prioritize feeding and a shorter walk"
+- "Grooming can be scheduled on alternate days if daily time is too constrained"
 
 ---
 
@@ -167,9 +225,7 @@ Runs 8 automated test cases:
 | 7 | RAG retrieval returns relevant passages | PASS |
 | 8 | Multi-pet scheduling | PASS |
 
-Expected output: `8/8 tests passed`
-
-Tests 1–6 and 8 run without a Gemini key. Test 7 is skipped automatically if no PDFs or API key are present.
+**Testing summary:** 8/8 tests pass. The guardrail correctly identifies overloaded schedules and skipped HIGH-priority tasks (Case 2). The determinism test (Case 6) confirms the greedy algorithm is fully reproducible — identical inputs always produce identical outputs. The RAG test (Case 7) skips automatically when no Gemini API key or PDFs are present, so it never blocks runs in keyless environments. The multi-pet test (Case 8) verifies that tasks from different pets are all considered in a single schedule pass. The biggest reliability challenge was the RAG relevance threshold: raw string splitting treated punctuated tokens like `"walk,"` as different from `"walk"`, causing the filter to reject relevant passages. Normalizing tokens with a regex fix resolved this.
 
 ---
 
@@ -201,28 +257,17 @@ All three AI services (`ai_agent`, `rag`, `evaluator`) are optional from the UI'
 
 Each pet gets its own retrieval pass scoped to its species, age, and tasks. This prevents a dog's walking guidelines from contaminating a cat's feeding context. The multi-query approach (4 queries per pet) broadens recall; hybrid reranking (semantic score + keyword overlap boost) improves precision.
 
-**Design changes from original**
-
-- Added `task_id` (UUID) to `Task` to support reliable client-side identification and "mark done" without title collisions.
-- Added `ScheduleResult` as a typed return object rather than a plain dict — this made the FastAPI response schema straightforward to derive with Pydantic.
-- Kept `available_start` / `available_end` as strings on `Owner` — the React time input natively produces "HH:MM" strings, and conversion happens inside the Scheduler only when a `datetime` object is actually needed.
-
 ---
 
 ### 3. Scheduling logic and tradeoffs
 
 **Algorithm**
 
-The scheduler uses a greedy, first-fit approach:
 1. Collect all pending tasks from all pets
 2. Sort by priority (HIGH first), break ties by shortest duration
-3. Walk through the sorted list; assign each task the next available slot, respecting preferred-time hints where possible
+3. Walk through the sorted list; assign each task the next available slot, respecting preferred-time hints
 4. Skip any task whose end time would exceed the availability window
 5. Check every task pair for overlapping durations and surface conflicts as warnings
-
-**Why greedy?**
-
-A greedy algorithm is simple to reason about: an owner reading the output can predict exactly why each task landed where it did. Optimality (fitting the maximum number of tasks) matters less than predictability for a daily care schedule.
 
 **Key tradeoff**
 
@@ -234,23 +279,15 @@ A single large HIGH task can displace several smaller MEDIUM tasks that would co
 
 **Semantic RAG (`rag.py`)**
 
-Pet care PDFs (Humane Fort Wayne Dog-Book and Cat-Book) are split into 400-character chunks with 80-character overlap using `RecursiveCharacterTextSplitter`, embedded with `gemini-embedding-001`, and stored in a persistent Chroma vector store at `backend/data/chroma_db/`.
-
-For each pet, four queries are built from the pet's species, age, and task descriptions. Each query hits the species-filtered vector store (`k=6`), and all results are merged. Deduplication runs first, then hybrid reranking (semantic position + keyword overlap score + boost for pet-care-specific terms like "walk", "feeding", "grooming"). The top 3 passages after relevance filtering are returned with source attribution.
+Pet care PDFs are split into 400-character chunks with 80-character overlap using `RecursiveCharacterTextSplitter`, embedded with `gemini-embedding-001`, and stored in a persistent Chroma vector store. For each pet, four queries are built from the pet's species, age, and task descriptions. Each query hits the species-filtered vector store (`k=6`), and all results are merged. Hybrid reranking (semantic position + keyword overlap + boost for pet-care-specific terms) selects the top 3 passages, returned with source attribution.
 
 **LangChain AI agent (`ai_agent.py`)**
 
-Uses a `ChatPromptTemplate` → `ChatGoogleGenerativeAI` → `StrOutputParser` chain. The prompt injects the full schedule context (owner window, all pets, scheduled and skipped tasks) plus the per-pet RAG passages retrieved above. Gemini 2.0 Flash is asked to return strict JSON with three keys: `reasoning` (step-by-step decision rationale), `explanation` (plain-English owner-facing summary), and `recommendations` (3–4 actionable tips drawn directly from the retrieved passages). A markdown-fence stripping step handles model output that wraps JSON in code blocks.
+Uses a `ChatPromptTemplate` → `ChatGoogleGenerativeAI` → `StrOutputParser` chain. The prompt injects the full schedule context plus per-pet RAG passages and asks Gemini 2.0 Flash to return strict JSON with three keys: `reasoning`, `explanation`, and `recommendations`. A markdown-fence stripping step handles model output that wraps JSON in code blocks.
 
 **Guardrail evaluator (`evaluator.py`)**
 
-Rule-based — no LLM involved. Four checks produce a 0–100 score:
-- Skipped HIGH-priority task → issue, −20 pts each
-- Time conflict in output → issue, −20 pts each
-- Utilisation > 95% → warning, −5 pts
-- Utilisation < 20% with scheduled tasks → warning, −5 pts
-
-This layer runs even without a Gemini key and gives users an objective quality signal independent of the AI explanation.
+Rule-based — no LLM involved. Four checks produce a 0–100 score: skipped HIGH task (−20), time conflict (−20), utilisation >95% (−5), utilisation <20% with scheduled tasks (−5). Runs even without a Gemini key.
 
 ---
 
@@ -258,39 +295,24 @@ This layer runs even without a Gemini key and gives users an objective quality s
 
 **How AI was used during development**
 
-- **Architecture planning** — used AI to map out the FastAPI + React + Gemini integration before writing any code. Most effective when the prompt was specific: *"I have a Python dataclass-based domain model. How should I structure Pydantic schemas to mirror it for a FastAPI endpoint?"*
-- **RAG pipeline design** — used AI to design the multi-query retrieval + hybrid reranking approach, then reviewed and implemented each stage.
-- **Prompt engineering** — iterated on the Gemini prompt through several versions. The key insight was asking for strict JSON output with named keys rather than free text — this eliminated the need to parse unstructured output.
-- **Debugging** — used AI to interpret FastAPI validation errors and trace Pydantic v2 schema mismatches.
+- **Architecture planning** — used AI to map out the FastAPI + React + Gemini integration before writing any code. Most effective with specific prompts: *"I have a Python dataclass-based domain model. How should I structure Pydantic schemas to mirror it for a FastAPI endpoint?"*
+- **RAG pipeline design** — used AI to design the multi-query retrieval and hybrid reranking approach.
+- **Prompt engineering** — iterated on the Gemini prompt. Key insight: asking for strict JSON output with named keys eliminated the need to parse unstructured text.
+- **Debugging** — used AI to trace a Pydantic v2 schema mismatch and interpret FastAPI validation errors.
 
-**What worked well with AI assistance**
+**What worked well**
 
-The most reliable outputs came from prompts that included concrete code context. Asking *"Given this Pydantic schema, write the FastAPI route"* produced immediately usable code. Vague prompts like *"make the AI smarter"* produced unfocused suggestions.
+The most reliable outputs came from prompts that included concrete code context. Asking *"Given this Pydantic schema, write the FastAPI route"* produced immediately usable code.
 
 **Where AI assistance fell short**
 
-- Initial Gemini prompt produced inconsistently structured responses — sometimes returning markdown-fenced JSON, sometimes plain text. The workaround had to be discovered through testing.
-- AI occasionally suggested over-engineering where simpler solutions worked fine.
-
-**Key takeaway**
-
-AI is most useful when you already have a clear design in mind and are asking it to fill in known gaps. The architectural decisions — stateless API, separation of scheduling logic from AI layer, graceful degradation — were made by reasoning through the requirements, not by asking an AI what to do.
+The initial Gemini prompt produced inconsistently structured responses — sometimes markdown-fenced JSON, sometimes plain text. The fence-stripping workaround had to be discovered through testing, not from an AI suggestion. AI also occasionally suggested over-engineering (Redis caching, separate microservices) that was inappropriate for the project scale.
 
 ---
 
 ### 6. Testing and verification
 
-**Evaluation harness (`evaluate.py`)**
-
-Eight test cases cover the main paths through the system:
-- Determinism: identical inputs produce identical outputs on every run
-- Guardrail correctness: overloaded schedules are correctly flagged as failures
-- RAG retrieval: relevant passages are returned for standard dog/cat tasks
-- Multi-pet: tasks from different pets are all considered in one schedule
-
-**Confidence level**
-
-High confidence in the scheduling logic — the greedy algorithm and conflict detector are tested with both happy paths and edge cases. Medium confidence in the AI output quality — the Gemini responses are structurally validated but their content depends on prompt quality and model behaviour, which can vary.
+Eight test cases cover the main paths: determinism, guardrail correctness for overloaded schedules, RAG retrieval for standard dog/cat tasks, and multi-pet scheduling. High confidence in the scheduling logic. Medium confidence in AI output quality — Gemini responses are structurally validated but content depends on prompt quality and model behaviour, which can vary between runs.
 
 ---
 
@@ -298,13 +320,37 @@ High confidence in the scheduling logic — the greedy algorithm and conflict de
 
 **Current limitations**
 - No persistent storage — refreshing the browser wipes all state
-- The Chroma vector store must be rebuilt if PDFs change (delete `backend/data/chroma_db/` to trigger a rebuild)
+- The Chroma vector store must be rebuilt if PDFs change (delete `backend/data/chroma_db/` to trigger a rebuild on the next AI request)
 - No authentication — the API is open to any localhost caller
-- Species is limited to dog/cat; other pets fall back to unfiltered retrieval
+- Species support is limited to dog and cat; other pets fall back to unfiltered retrieval
 
 **Future improvements**
-- SQLite persistence so pets and tasks survive page refreshes
-- Learn from user feedback (thumbs up/down on AI explanations) to improve prompt tuning over time
-- Mobile app with push notifications for task reminders
+- SQLite or localStorage persistence so pets and tasks survive page refreshes
+- User feedback (thumbs up/down) to improve prompt tuning over time
+- Mobile push notifications for task reminders
 - Multi-user support with owner accounts
-- Support additional species (rabbit, bird, etc.) with dedicated care guides
+- Additional species support (rabbit, bird, reptile) with dedicated care guides
+
+---
+
+### 8. Ethics and Responsible AI
+
+**Limitations and potential biases**
+
+The knowledge base is sourced exclusively from the Humane Fort Wayne Pet Care Guide. This means the AI's recommendations reflect one organization's guidelines, which may not cover all breeds, ages, or medical conditions. Owners with exotic pets or pets with special medical needs should consult a licensed veterinarian — the system is an organizational aid, not a diagnostic tool.
+
+The guardrail scoring is rule-based and cannot detect nuanced problems, such as a walk scheduled during extreme weather or a feeding time that conflicts with medication absorption windows. It only catches structural schedule issues.
+
+**Potential misuse and safeguards**
+
+A pet owner could interpret the AI's `recommendations` as medical advice and skip professional veterinary care. The prompt explicitly instructs the model to base recommendations only on the retrieved care guide passages and to acknowledge when the guide doesn't cover a situation. The guardrail layer provides an independent validation signal that doesn't rely on the LLM. The system should include a visible disclaimer that it supplements, not replaces, veterinary advice.
+
+**What surprised me during reliability testing**
+
+The most unexpected failure was in the RAG relevance filter. The system was returning zero passages for valid dog walking queries because the keyword scoring function split text on whitespace without stripping punctuation — meaning the query token `"walk,"` (with trailing comma) never matched the index token `"walk"`. The filter's threshold of 2.0 became effectively unreachable. This was a silent failure: no error was raised, the system just returned empty context to the AI. It highlighted how easy it is for a preprocessing bug to silently degrade AI output quality with no visible signal.
+
+**AI collaboration: one helpful moment, one flawed moment**
+
+*Helpful:* When designing the per-pet RAG isolation, I asked Claude to suggest a query-building strategy that incorporated species, age, and task context. It suggested the four-query template approach (care guide query, how-to query, safety query, health-and-behavior query), which meaningfully broadened retrieval recall compared to a single query. This was directly implemented and improved passage variety.
+
+*Flawed:* Early in the project, Claude suggested using LangSmith tracing as part of the RAG setup and generated code that imported and initialized LangSmith. This added an unnecessary API key dependency (`LANGCHAIN_API_KEY`) for a feature that wasn't needed for the core system to function. The import was removed after it caused a startup error in environments without the key set — the suggestion was technically valid but wrong for the project's simplicity requirements.
