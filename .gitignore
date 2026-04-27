@@ -3,3 +3,7 @@ __pycache__/
 .venv_new/
 .pytest_cache/
 .DS_Store
+.env
+frontend/node_modules/
+frontend/dist/
+backend/data/chroma_db/
