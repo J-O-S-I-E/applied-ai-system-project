@@ -141,7 +141,8 @@ def build_ai_schedule(req: ScheduleRequest):
     for pet in owner.pets:
         passages = retrieve_for_pet(pet, pet.tasks)
         pet_rag_contexts[pet.name] = passages
-        if passages:
+        # Include all pets with tasks, even if no passages were retrieved
+        if pet.tasks:
             pet_guidelines_out.append(PetGuidelinesOut(
                 pet_name=pet.name,
                 species=pet.species.value,
